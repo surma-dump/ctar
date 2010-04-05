@@ -18,7 +18,7 @@ func ReadPassword() string {
 	return string(passw)
 }
 
-func setup() (fio io.ReadWriter, rc bool, password string, e os.Error) {
+func setup() (fio io.ReadWriter, rc bool, e os.Error) {
 	fname := flag.String("f", "", "Use a file instead of stdin/stdout")
 	c, x := flag.Bool("c", false, "Create an archive"), flag.Bool("x", false, "Extract an archive")
 	h := flag.Bool("h", false, "Display this help")
@@ -48,14 +48,12 @@ func setup() (fio io.ReadWriter, rc bool, password string, e os.Error) {
 		fio = io.ReadWriter(bufio.NewReadWriter(bufio.NewReader(os.Stdin), bufio.NewWriter(os.Stdout)))
 	}
 
-	password = ReadPassword()
 	return
 }
 
 func main() {
-//	fio, create, password, e := setup()
-	_, _, _, e := setup()
+//	fio, create, e := setup()
+	_, _, e := setup()
+	password := ReadPassword()
 	surmc.PanicOnError(e, "epd failed")
-
-
 }
