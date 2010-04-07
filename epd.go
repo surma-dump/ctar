@@ -10,12 +10,31 @@ import (
 )
 
 func ReadPassword() string {
-	passw := make([]byte, 128)
 	fmt.Printf("Password: ")
 	surmc.SetAttr(surmc.ATTR_FG_BLACK, surmc.ATTR_BG_BLACK)
-	os.Stdin.Read(passw)
+	passw, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	surmc.SetAttr(surmc.ATTR_RESET)
-	return string(passw)
+
+	return passw[0:len(passw)-1]
+}
+
+func checkFlagValidity(h, c, x bool) (rc bool, e os.Error) {
+	if h {
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
+
+	if c == x {
+		e = os.NewError("Pass either -c or -x")
+		return
+	}
+	rc = !x
+
+	if rc && len(flag.Arg(0)) == 0 {
+		e = os.NewError("No directory specified")
+		return
+	}
+	return
 }
 
 func setup() (fio io.ReadWriter, rc bool, e os.Error) {
@@ -24,19 +43,8 @@ func setup() (fio io.ReadWriter, rc bool, e os.Error) {
 	h := flag.Bool("h", false, "Display this help")
 	flag.Parse()
 
-	if *h {
-		flag.PrintDefaults()
-		os.Exit(0)
-	}
-
-	if *c == *x {
-		e = os.NewError("Pass either -c or -x")
-		return
-	}
-	rc = !*x
-
-	if rc && len(flag.Arg(0)) == 0 {
-		e = os.NewError("No directory specified")
+	rc, e = checkFlagValidity(*h, *c, *x)
+	if e != nil {
 		return
 	}
 
@@ -52,8 +60,11 @@ func setup() (fio io.ReadWriter, rc bool, e os.Error) {
 }
 
 func main() {
-//	fio, create, e := setup()
-	_, _, e := setup()
-	_ = ReadPassword()
+	fio, create, e := setup()
 	surmc.PanicOnError(e, "epd failed")
+
+	password, e := surmc.Sha256hash([]byte(ReadPassword()))
+	surmc.PanicOnError(e, "Obtaining password hash failed")
+
+
 }
