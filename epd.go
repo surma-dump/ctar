@@ -12,9 +12,9 @@ import (
 func ReadPassword() string {
 	passw := make([]byte, 128)
 	fmt.Printf("Password: ")
-	fmt.Printf("\033[40;30m")
+	surmc.SetAttr(surmc.ATTR_FG_BLACK, surmc.ATTR_BG_BLACK)
 	os.Stdin.Read(passw)
-	fmt.Printf("\033[m")
+	surmc.SetAttr(surmc.ATTR_RESET)
 	return string(passw)
 }
 
@@ -54,6 +54,6 @@ func setup() (fio io.ReadWriter, rc bool, e os.Error) {
 func main() {
 //	fio, create, e := setup()
 	_, _, e := setup()
-	password := ReadPassword()
+	_ = ReadPassword()
 	surmc.PanicOnError(e, "epd failed")
 }
