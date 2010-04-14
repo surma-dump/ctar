@@ -141,7 +141,7 @@ func TraverseFileTree(path string) ([]string, os.Error) {
 	filt := make(chan string)
 	go FilterEmptyStrings(filt, list)
 	ret := ChannelToSlice(filt)
-	return []string(ret), nil
+	return ret, nil
 
 }
 
