@@ -61,7 +61,7 @@ func setup() (fio io.ReadWriter, rc bool, pass string, e os.Error) {
 	}
 
 	if len(*fname) > 0 && rc {
-		fio, e = os.Open(*fname, os.O_WRONLY|os.O_CREAT, 0600)
+		fio, e = os.Open(*fname, os.O_WRONLY|os.O_CREAT|os.O_TRUNC, 0600)
 	} else if len(*fname) > 0 && !rc {
 		fio, e = os.Open(*fname, os.O_RDONLY, 0)
 	} else {
@@ -101,7 +101,7 @@ func FilterEmptyStrings(out chan<- string, in <-chan string) {
 	return
 }
 
-func ChannelToSlice(in <-chan string) []string {
+func ChannelToSliceString(in <-chan string) []string {
 	v := vector.StringVector(make([]string, 1))
 
 	for i := range in {
@@ -140,27 +140,70 @@ func TraverseFileTree(path string) ([]string, os.Error) {
 	list := l.Iter()
 	filt := make(chan string)
 	go FilterEmptyStrings(filt, list)
-	ret := ChannelToSlice(filt)
+	ret := ChannelToSliceString(filt)
 	return ret, nil
 
 }
 
+func AddFileToTar(tw *tar.Writer, filepath string) os.Error {
+	d, e := os.Stat(filepath)
+	if e != nil {
+		return e
+	}
+
+	h := tar.Header{
+		Name:  filepath,
+		Mode:  int64(d.Mode),
+		Uid:   int64(d.Uid),
+		Gid:   int64(d.Gid),
+		Atime: int64(d.Atime_ns / 1e9),
+		Ctime: int64(d.Ctime_ns / 1e9),
+		Mtime: int64(d.Mtime_ns / 1e9),
+	}
+
+	if d.IsDirectory() {
+		h.Typeflag = tar.TypeDir
+	} else if d.IsRegular() {
+		h.Typeflag = tar.TypeReg
+	} else {
+		fmt.Fprintf(os.Stderr, "Skipped non-regular file: \"%s\"\n", filepath)
+		return nil
+	}
+	tw.WriteHeader(&h)
+
+	if !d.IsDirectory() {
+		f, e := os.Open(filepath, os.O_RDONLY, 0)
+		if e != nil {
+			return e
+		}
+
+		io.Copy(tw, f)
+		f.Close()
+	}
+	return nil
+}
+
 func TarDirectory(path string, w io.Writer) os.Error {
-	dir, e := os.Open(path, os.O_RDONLY, 0)
+	rootdir, e := os.Open(path, os.O_RDONLY, 0)
+	if e != nil {
+		return e
+	}
+	defer rootdir.Close()
+
+	filelist, e := TraverseFileTree(path)
 	if e != nil {
 		return e
 	}
 
-	list, e := TraverseFileTree(path)
-	if e != nil {
-		return e
-	}
+	tw := tar.NewWriter(w)
 
-	for _, l := range list {
-		fmt.Fprintf(os.Stderr, "Packing: %s\n", l)
+	for _, filepath := range filelist {
+		fmt.Fprintf(os.Stderr, "Packing: %s\n", filepath)
+		e := AddFileToTar(tw, filepath)
+		if e != nil {
+			return e
+		}
 	}
-	_ = tar.NewWriter(w)
-	dir.Close()
 	return nil
 }
 
@@ -173,9 +216,11 @@ func main() {
 
 	_ = key
 	if create {
-		e = TarDirectory(flag.Arg(0), fio)
-		surmc.PanicOnError(e, "Opening target dir")
+		for _, dir := range flag.Args() {
+			e = TarDirectory(dir, fio)
+			surmc.PanicOnError(e, "Taring failed")
+		}
 	} else {
-		fmt.Print("Duh\n")
+		fmt.Fprintf(os.Stderr, "Not implemented\n")
 	}
 }
