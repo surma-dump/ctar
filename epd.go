@@ -207,6 +207,39 @@ func TarDirectory(path string, w io.Writer) os.Error {
 	return nil
 }
 
+func ExtractFile(hdr *tar.Header, r io.Reader) os.Error {
+	if hdr.Typeflag == tar.TypeDir {
+		e := os.Mkdir("./"+hdr.Name, int(hdr.Mode))
+		return e
+	} else {
+		f, e := os.Open("./"+hdr.Name, os.O_CREATE|os.O_EXCL, int(hdr.Mode))
+		if e != nil {
+			return e
+		}
+		defer f.Close()
+
+		io.Copy(f, r)
+		return nil
+	}
+	return nil // Never reached
+}
+
+func UntarArchive(r io.Reader) os.Error {
+	tr := tar.NewReader(r)
+
+	for hdr, e := tr.Next(); hdr != nil; hdr, e = tr.Next() {
+		if e != nil {
+			return e
+		}
+
+		e = ExtractFile(hdr, tr)
+		if e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
 func main() {
 	fio, create, password, e := setup()
 	surmc.PanicOnError(e, "epd failed")
@@ -221,6 +254,7 @@ func main() {
 			surmc.PanicOnError(e, "Taring failed")
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "Not implemented\n")
+		e = UntarArchive(fio)
+		surmc.PanicOnError(e, "Extracting failed")
 	}
 }
