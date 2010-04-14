@@ -8,6 +8,7 @@ import (
 	"surmc"
 	"bufio"
 	"archive/tar"
+	"container/vector"
 )
 
 const (
@@ -20,7 +21,7 @@ func ReadPassword() string {
 	passw, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	surmc.SetAttr(surmc.ATTR_RESET)
 
-	return passw[0:len(passw)-1]
+	return passw[0 : len(passw)-1]
 }
 
 func checkFlagValidity(h, c, x bool) (rc bool, e os.Error) {
@@ -59,8 +60,8 @@ func setup() (fio io.ReadWriter, rc bool, pass string, e os.Error) {
 		return
 	}
 
-	if len(*fname) > 0 && rc{
-		fio, e = os.Open(*fname, os.O_WRONLY | os.O_CREAT, 0600)
+	if len(*fname) > 0 && rc {
+		fio, e = os.Open(*fname, os.O_WRONLY|os.O_CREAT, 0600)
 	} else if len(*fname) > 0 && !rc {
 		fio, e = os.Open(*fname, os.O_RDONLY, 0)
 	} else {
@@ -70,7 +71,53 @@ func setup() (fio io.ReadWriter, rc bool, pass string, e os.Error) {
 	return
 }
 
+func IsDirectory(path string) (bool, os.Error) {
+	d, e := os.Stat(path)
+	if e != nil {
+		return false, e
+	}
+
+	return d.IsDirectory(), e
+}
+
+func GetDirectoryContent(path string) ([]string, os.Error) {
+	f, e := os.Open(path, os.O_RDONLY, 0)
+	if e != nil {
+		return nil, e
+	}
+
+	l, e := f.Readdirnames(READ_ALL)
+	f.Close()
+	return l, e
+}
+
 func TraverseFileTree(path string) ([]string, os.Error) {
+	l := vector.StringVector(make([]string, 10))
+	l.Push(path)
+	d, e := IsDirectory(path)
+	if e != nil {
+		return nil, e
+	}
+
+	if d {
+		c, e := GetDirectoryContent(path)
+		if e != nil {
+			return nil, e
+		}
+
+		for _, file := range c {
+			s, e := TraverseFileTree(path + "/" + file)
+			v := vector.StringVector(s)
+			if e != nil {
+				return nil, e
+			}
+
+			l.AppendVector(&v)
+		}
+	}
+
+	return l.Data(), nil
+
 }
 
 func TarDirectory(path string, w io.Writer) os.Error {
@@ -79,15 +126,16 @@ func TarDirectory(path string, w io.Writer) os.Error {
 		return e
 	}
 
-	list, e := dir.Readdirnames(READ_ALL)
+	list, e := TraverseFileTree(path)
 	if e != nil {
 		return e
 	}
 
-	for _,l := range list {
+	for _, l := range list {
 		fmt.Fprintf(os.Stderr, "Packing: %s\n", l)
 	}
 	_ = tar.NewWriter(w)
+	dir.Close()
 	return nil
 }
 
