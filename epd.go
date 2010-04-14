@@ -91,8 +91,29 @@ func GetDirectoryContent(path string) ([]string, os.Error) {
 	return l, e
 }
 
+func FilterEmptyStrings(out chan<- string, in <-chan string) {
+	for i := range in {
+		if len(i) != 0 {
+			out <- i
+		}
+	}
+	close(out)
+	return
+}
+
+func ChannelToSlice(in <-chan string) []string {
+	v := vector.StringVector(make([]string, 1))
+
+	for i := range in {
+		v.Push(i)
+	}
+
+	r := v.Data()
+	return r[1:len(r)]
+}
+
 func TraverseFileTree(path string) ([]string, os.Error) {
-	l := vector.StringVector(make([]string, 10))
+	l := vector.StringVector(make([]string, 1))
 	l.Push(path)
 	d, e := IsDirectory(path)
 	if e != nil {
@@ -116,7 +137,11 @@ func TraverseFileTree(path string) ([]string, os.Error) {
 		}
 	}
 
-	return l.Data(), nil
+	list := l.Iter()
+	filt := make(chan string)
+	go FilterEmptyStrings(filt, list)
+	ret := ChannelToSlice(filt)
+	return []string(ret), nil
 
 }
 
