@@ -9,6 +9,8 @@ import (
 	"bufio"
 	"archive/tar"
 	"container/vector"
+	"crypto/aes"
+	"crypto/block"
 )
 
 const (
@@ -102,7 +104,7 @@ func FilterEmptyStrings(out chan<- string, in <-chan string) {
 }
 
 func ChannelToSliceString(in <-chan string) []string {
-	v := vector.StringVector(make([]string, 1))
+	v := vector.StringVector(make([]string, 1, 20))
 
 	for i := range in {
 		v.Push(i)
@@ -113,7 +115,7 @@ func ChannelToSliceString(in <-chan string) []string {
 }
 
 func TraverseFileTree(path string) ([]string, os.Error) {
-	l := vector.StringVector(make([]string, 1))
+	l := vector.StringVector(make([]string, 1, 20))
 	l.Push(path)
 	d, e := IsDirectory(path)
 	if e != nil {
@@ -207,7 +209,7 @@ func TarDirectory(path string, w io.Writer) os.Error {
 	return nil
 }
 
-func ExtractFile(hdr *tar.Header, r io.Reader) os.Error {
+func ExtractFileFromTar(hdr *tar.Header, r io.Reader) os.Error {
 	if hdr.Typeflag == tar.TypeDir {
 		e := os.Mkdir("./"+hdr.Name, int(hdr.Mode))
 		return e
@@ -232,10 +234,40 @@ func UntarArchive(r io.Reader) os.Error {
 			return e
 		}
 
-		e = ExtractFile(hdr, tr)
+		e = ExtractFileFromTar(hdr, tr)
 		if e != nil {
 			return e
 		}
+	}
+	return nil
+}
+
+func SetupEncrypt(w io.Writer, key []byte, iv []byte) (io.Writer, os.Error) {
+	c, e := aes.NewCipher(key)
+	if e != nil {
+		return nil, e
+	}
+	return block.NewCBCEncrypter(c, iv, w), nil
+}
+
+func SetupDecrypt(r io.Reader, key []byte, iv []byte) (io.Reader, os.Error) {
+	c, e := aes.NewCipher(key)
+	if e != nil {
+		return nil, e
+	}
+	return block.NewCBCDecrypter(c, iv, r), nil
+}
+
+func CheckMagicNumber(r io.Reader) os.Error {
+	var b [4]byte
+
+	_, e := r.Read(&b)
+	if e != nil {
+		return e
+	}
+
+	if string(&b) != "CTAR" {
+		return os.NewError("MagicNumber doesn't match. (Wrong password?)")
 	}
 	return nil
 }
@@ -244,17 +276,25 @@ func main() {
 	fio, create, password, e := setup()
 	surmc.PanicOnError(e, "epd failed")
 
-	key, e := surmc.Sha256hash([]byte(password))
+	key, e := surmc.SHA256hash([]byte(password))
+	surmc.PanicOnError(e, "Calculating password hash failed")
+	iv, e := surmc.MD5hash([]byte(password))
 	surmc.PanicOnError(e, "Calculating password hash failed")
 
-	_ = key
 	if create {
+		cio, e := SetupEncrypt(fio, key, iv)
+		surmc.PanicOnError(e, "Encryption system failed")
+		fmt.Fprintf(cio, "CTAR")
 		for _, dir := range flag.Args() {
-			e = TarDirectory(dir, fio)
+			e = TarDirectory(dir, cio)
 			surmc.PanicOnError(e, "Taring failed")
 		}
 	} else {
-		e = UntarArchive(fio)
+		cio, e := SetupDecrypt(fio, key, iv)
+		surmc.PanicOnError(e, "Decryption system failed")
+		e = CheckMagicNumber(cio)
+		surmc.PanicOnError(e, "Not a valid CTAR")
+		e = UntarArchive(cio)
 		surmc.PanicOnError(e, "Extracting failed")
 	}
 }
