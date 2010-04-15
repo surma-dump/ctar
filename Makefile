@@ -1,7 +1,7 @@
 include $(GOROOT)/src/Make.$(GOARCH)
 
-TARG=epd
+TARG=ctar
 GOFILES=\
-	epd.go\
+	ctar.go\
 
 include $(GOROOT)/src/Make.cmd
