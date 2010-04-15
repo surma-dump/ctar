@@ -54,7 +54,7 @@ func setup() (fio io.ReadWriter, rc bool, pass string, e os.Error) {
 	pass = *p
 
 	if pass == "" {
-		fmt.Fprintf(os.Stderr, "WARNING: No password (-p) specified\n")
+		pass = ReadPassword()
 	}
 
 	rc, e = checkFlagValidity(*h, *c, *x)
