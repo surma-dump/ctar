@@ -104,8 +104,8 @@ func FilterEmptyStrings(out chan<- string, in <-chan string) {
 }
 
 func ChannelToSliceString(in <-chan string) []string {
-	v := vector.StringVector(make([]string, 1, 20))
 
+	v := vector.StringVector(make([]string, 1, 20))
 	for i := range in {
 		v.Push(i)
 	}
@@ -139,11 +139,25 @@ func TraverseFileTree(path string) ([]string, os.Error) {
 		}
 	}
 
-	list := l.Iter()
-	filt := make(chan string)
-	go FilterEmptyStrings(filt, list)
-	ret := ChannelToSliceString(filt)
-	return ret, nil
+	return l.Data(), nil
+
+}
+
+func TraverseFileTreeFiltered(path string) ([]string, os.Error) {
+	list, e := TraverseFileTree(path)
+	if e != nil {
+		return nil, e
+	}
+
+	v := vector.StringVector(make([]string, 1, 20))
+	for _,l := range list {
+		if len(l) != 0 {
+			v.Push(l)
+		}
+	}
+
+	r := v.Data()
+	return r[1:len(r)], nil
 
 }
 
@@ -192,7 +206,7 @@ func TarDirectory(path string, w io.Writer) os.Error {
 	}
 	defer rootdir.Close()
 
-	filelist, e := TraverseFileTree(path)
+	filelist, e := TraverseFileTreeFiltered(path)
 	if e != nil {
 		return e
 	}
