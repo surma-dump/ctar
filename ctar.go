@@ -172,6 +172,7 @@ func AddFileToTar(tw *tar.Writer, filepath string) os.Error {
 		Mode:  int64(d.Mode),
 		Uid:   int64(d.Uid),
 		Gid:   int64(d.Gid),
+		Size:  int64(d.Size),
 		Atime: int64(d.Atime_ns / 1e9),
 		Ctime: int64(d.Ctime_ns / 1e9),
 		Mtime: int64(d.Mtime_ns / 1e9),
@@ -193,8 +194,11 @@ func AddFileToTar(tw *tar.Writer, filepath string) os.Error {
 			return e
 		}
 
-		io.Copy(tw, f)
+		_, e = io.Copy(tw, f)
 		f.Close()
+		if e != nil {
+			return e
+		}
 	}
 	return nil
 }
@@ -220,6 +224,7 @@ func TarDirectory(path string, w io.Writer) os.Error {
 			return e
 		}
 	}
+	tw.Flush()
 	return nil
 }
 
@@ -228,13 +233,16 @@ func ExtractFileFromTar(hdr *tar.Header, r io.Reader) os.Error {
 		e := os.Mkdir("./"+hdr.Name, int(hdr.Mode))
 		return e
 	} else {
-		f, e := os.Open("./"+hdr.Name, os.O_CREATE|os.O_EXCL, int(hdr.Mode))
+		f, e := os.Open("./"+hdr.Name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, int(hdr.Mode))
 		if e != nil {
 			return e
 		}
 		defer f.Close()
 
-		io.Copy(f, r)
+		_, e = io.Copy(f, r)
+		if e != nil {
+			return e
+		}
 		return nil
 	}
 	return nil // Never reached
@@ -248,6 +256,7 @@ func UntarArchive(r io.Reader) os.Error {
 			return e
 		}
 
+		fmt.Fprintf(os.Stderr, "Unpacking: %s\n", hdr.Name)
 		e = ExtractFileFromTar(hdr, tr)
 		if e != nil {
 			return e
