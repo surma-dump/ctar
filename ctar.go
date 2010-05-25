@@ -15,6 +15,7 @@ import (
 
 const (
 	READ_ALL = -1
+	VERSION = "1.1"
 )
 
 func ReadPassword() string {
@@ -28,6 +29,8 @@ func ReadPassword() string {
 
 func checkFlagValidity(h, c, x bool) (rc bool, e os.Error) {
 	if h {
+		fmt.Printf("ctar version %s\n"+
+		"by Alexander \"Surma\"Surma\n\n", VERSION)
 		flag.PrintDefaults()
 		os.Exit(0)
 	}

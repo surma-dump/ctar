@@ -1,2 +1,4 @@
 * verbosity flags
-* uid/gid overwritin
+* Fail-Flags
+* Reading filelist from stdin
+* No-password flag
