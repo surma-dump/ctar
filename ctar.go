@@ -235,6 +235,10 @@ func TarDirectory(path string, w io.Writer) os.Error {
 func ExtractFileFromTar(hdr *tar.Header, r io.Reader) os.Error {
 	if hdr.Typeflag == tar.TypeDir {
 		e := os.Mkdir("./"+hdr.Name, int(hdr.Mode))
+		if e != nil {
+			return e
+		}
+		e = os.Chown("./"+hdr.Name, int(hdr.Uid), int(hdr.Gid))
 		return e
 	} else {
 		f, e := os.Open("./"+hdr.Name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, int(hdr.Mode))
@@ -242,6 +246,11 @@ func ExtractFileFromTar(hdr *tar.Header, r io.Reader) os.Error {
 			return e
 		}
 		defer f.Close()
+
+		e = os.Chown("./"+hdr.Name, int(hdr.Uid), int(hdr.Gid))
+		if e != nil {
+			return e
+		}
 
 		_, e = io.Copy(f, r)
 		if e != nil {
