@@ -150,7 +150,7 @@ func TraverseFileTreeFiltered(path string) ([]string, os.Error) {
 	}
 
 	v := vector.StringVector(make([]string, 1, 20))
-	for _,l := range list {
+	for _, l := range list {
 		if len(l) != 0 {
 			v.Push(l)
 		}
