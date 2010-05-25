@@ -53,13 +53,13 @@ func setup() (fio io.ReadWriter, rc bool, pass string, e os.Error) {
 	flag.Parse()
 	pass = *p
 
-	if pass == "" {
-		pass = ReadPassword()
-	}
-
 	rc, e = checkFlagValidity(*h, *c, *x)
 	if e != nil {
 		return
+	}
+
+	if pass == "" {
+		pass = ReadPassword()
 	}
 
 	if len(*fname) > 0 && rc {
@@ -170,8 +170,8 @@ func AddFileToTar(tw *tar.Writer, filepath string) os.Error {
 	h := tar.Header{
 		Name:  filepath,
 		Mode:  int64(d.Mode),
-		Uid:   int64(d.Uid),
-		Gid:   int64(d.Gid),
+		Uid:   d.Uid,
+		Gid:   d.Gid,
 		Size:  int64(d.Size),
 		Atime: int64(d.Atime_ns / 1e9),
 		Ctime: int64(d.Ctime_ns / 1e9),
@@ -218,10 +218,14 @@ func TarDirectory(path string, w io.Writer) os.Error {
 	tw := tar.NewWriter(w)
 
 	for _, filepath := range filelist {
-		fmt.Fprintf(os.Stderr, "Packing: %s\n", filepath)
-		e := AddFileToTar(tw, filepath)
-		if e != nil {
-			return e
+		if filepath != "." && filepath != ".." {
+			fmt.Fprintf(os.Stderr, "Packing: %s\n", filepath)
+			e := AddFileToTar(tw, filepath)
+			if e != nil {
+				return e
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "Skipping: %s\n", filepath)
 		}
 	}
 	tw.Flush()
@@ -259,7 +263,7 @@ func UntarArchive(r io.Reader) os.Error {
 		fmt.Fprintf(os.Stderr, "Unpacking: %s\n", hdr.Name)
 		e = ExtractFileFromTar(hdr, tr)
 		if e != nil {
-			return e
+			fmt.Fprintf(os.Stderr, "Failed! %s\n", e.String())
 		}
 	}
 	return nil
