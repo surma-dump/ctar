@@ -305,7 +305,7 @@ func CheckMagicNumber(r io.Reader) os.Error {
 		return e
 	}
 
-	if string(&b) != "CTAR" {
+	if string([]byte(&b)) != "CTAR" {
 		return os.NewError("MagicNumber doesn't match. (Wrong password?)")
 	}
 	return nil
