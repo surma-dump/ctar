@@ -113,8 +113,7 @@ func ChannelToSliceString(in <-chan string) []string {
 		v.Push(i)
 	}
 
-	r := v.Data()
-	return r[1:len(r)]
+	return v[1:v.Len()]
 }
 
 func TraverseFileTree(path string) ([]string, os.Error) {
@@ -142,7 +141,7 @@ func TraverseFileTree(path string) ([]string, os.Error) {
 		}
 	}
 
-	return l.Data(), nil
+	return l, nil
 
 }
 
@@ -159,8 +158,7 @@ func TraverseFileTreeFiltered(path string) ([]string, os.Error) {
 		}
 	}
 
-	r := v.Data()
-	return r[1:len(r)], nil
+	return v[1:v.Len()], nil
 
 }
 
@@ -237,14 +235,14 @@ func TarDirectory(path string, w io.Writer) os.Error {
 
 func ExtractFileFromTar(hdr *tar.Header, r io.Reader) os.Error {
 	if hdr.Typeflag == tar.TypeDir {
-		e := os.Mkdir("./"+hdr.Name, int(hdr.Mode))
+		e := os.Mkdir("./"+hdr.Name, uint32(hdr.Mode))
 		if e != nil {
 			return e
 		}
 		e = os.Chown("./"+hdr.Name, int(hdr.Uid), int(hdr.Gid))
 		return e
 	} else {
-		f, e := os.Open("./"+hdr.Name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, int(hdr.Mode))
+		f, e := os.Open("./"+hdr.Name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, uint32(hdr.Mode))
 		if e != nil {
 			return e
 		}
