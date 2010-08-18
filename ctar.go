@@ -248,10 +248,7 @@ func ExtractFileFromTar(hdr *tar.Header, r io.Reader) os.Error {
 		}
 		defer f.Close()
 
-		e = os.Chown("./"+hdr.Name, int(hdr.Uid), int(hdr.Gid))
-		if e != nil {
-			return e
-		}
+		_ = os.Chown("./"+hdr.Name, int(hdr.Uid), int(hdr.Gid))
 
 		_, e = io.Copy(f, r)
 		if e != nil {
@@ -273,7 +270,7 @@ func UntarArchive(r io.Reader) os.Error {
 		fmt.Fprintf(os.Stderr, "Unpacking: %s\n", hdr.Name)
 		e = ExtractFileFromTar(hdr, tr)
 		if e != nil {
-			fmt.Fprintf(os.Stderr, "Failed! %s\n", e.String())
+			fmt.Fprintf(os.Stderr, "\tFailed! %s\n", e.String())
 		}
 	}
 	return nil
