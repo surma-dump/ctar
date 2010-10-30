@@ -5,7 +5,9 @@ import (
 	"flag"
 	"io"
 	"os"
-	"surmc"
+	"git.78762.de/go/vt100"
+	"git.78762.de/go/crypto"
+	"git.78762.de/go/error"
 	"bufio"
 	"archive/tar"
 	"container/vector"
@@ -18,11 +20,20 @@ const (
 	VERSION = "1.1"
 )
 
+type myReadWriter struct {
+	io.Reader
+	io.Writer
+}
+
+var (
+	Stdinout io.ReadWriter = myReadWriter{os.Stdin, os.Stdout}
+)
+
 func ReadPassword() string {
 	fmt.Fprintf(os.Stderr, "Password: ")
-	surmc.SetAttr(surmc.ATTR_FG_BLACK, surmc.ATTR_BG_BLACK)
+	vt100.SetAttr(vt100.ATTR_FG_BLACK, vt100.ATTR_BG_BLACK)
 	passw, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-	surmc.SetAttr(surmc.ATTR_RESET)
+	vt100.SetAttr(vt100.ATTR_RESET)
 
 	return passw[0 : len(passw)-1]
 }
@@ -70,7 +81,7 @@ func setup() (fio io.ReadWriter, rc bool, pass string, e os.Error) {
 	} else if len(*fname) > 0 && !rc {
 		fio, e = os.Open(*fname, os.O_RDONLY, 0)
 	} else {
-		fio = surmc.Stdinout
+		fio = Stdinout
 	}
 
 	return
@@ -295,12 +306,12 @@ func SetupDecrypt(r io.Reader, key []byte, iv []byte) (io.Reader, os.Error) {
 func CheckMagicNumber(r io.Reader) os.Error {
 	var b [4]byte
 
-	_, e := r.Read(&b)
+	_, e := r.Read(b[:])
 	if e != nil {
 		return e
 	}
 
-	if string([]byte(&b)) != "CTAR" {
+	if string(b[:]) != "CTAR" {
 		return os.NewError("MagicNumber doesn't match. (Wrong password?)")
 	}
 	return nil
@@ -308,27 +319,27 @@ func CheckMagicNumber(r io.Reader) os.Error {
 
 func main() {
 	fio, create, password, e := setup()
-	surmc.PanicOnError(e, "epd failed")
+	error.PanicOnError(e, "epd failed")
 
-	key, e := surmc.SHA256hash([]byte(password))
-	surmc.PanicOnError(e, "Calculating password hash failed")
-	iv, e := surmc.MD5hash([]byte(password))
-	surmc.PanicOnError(e, "Calculating password hash failed")
+	key, e := crypto.SHA256hash([]byte(password))
+	error.PanicOnError(e, "Calculating password hash failed")
+	iv, e := crypto.MD5hash([]byte(password))
+	error.PanicOnError(e, "Calculating password hash failed")
 
 	if create {
 		cio, e := SetupEncrypt(fio, key, iv)
-		surmc.PanicOnError(e, "Encryption system failed")
+		error.PanicOnError(e, "Encryption system failed")
 		fmt.Fprintf(cio, "CTAR")
 		for _, dir := range flag.Args() {
 			e = TarDirectory(dir, cio)
-			surmc.PanicOnError(e, "Taring failed")
+			error.PanicOnError(e, "Taring failed")
 		}
 	} else {
 		cio, e := SetupDecrypt(fio, key, iv)
-		surmc.PanicOnError(e, "Decryption system failed")
+		error.PanicOnError(e, "Decryption system failed")
 		e = CheckMagicNumber(cio)
-		surmc.PanicOnError(e, "Not a valid CTAR")
+		error.PanicOnError(e, "Not a valid CTAR")
 		e = UntarArchive(cio)
-		surmc.PanicOnError(e, "Extracting failed")
+		error.PanicOnError(e, "Extracting failed")
 	}
 }
