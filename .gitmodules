@@ -1,0 +1,3 @@
+[submodule "src/pkg/vt100"]
+	path = src/pkg/vt100
+	url = git://git.78762.de/gomisc/vt100

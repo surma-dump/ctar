@@ -5,14 +5,15 @@ import (
 	"flag"
 	"io"
 	"os"
-	"git.78762.de/go/vt100"
-	"git.78762.de/go/crypto"
-	"git.78762.de/go/error"
+	"vt100"
 	"bufio"
 	"archive/tar"
 	"container/vector"
 	"crypto/aes"
 	"crypto/block"
+	"crypto/md5"
+	"crypto/sha256"
+	"hash"
 )
 
 const (
@@ -41,7 +42,7 @@ func ReadPassword() string {
 func checkFlagValidity(h, c, x bool) (rc bool, e os.Error) {
 	if h {
 		fmt.Printf("ctar version %s\n"+
-		"by Alexander \"Surma\"Surma\n\n", VERSION)
+			"by Alexander \"Surma\"Surma\n\n", VERSION)
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
@@ -180,14 +181,14 @@ func AddFileToTar(tw *tar.Writer, filepath string) os.Error {
 	}
 
 	h := tar.Header{
-		Name:  filepath,
-		Mode:  int64(d.Mode),
-		Uid:   d.Uid,
-		Gid:   d.Gid,
-		Size:  int64(d.Size),
-		Atime: int64(d.Atime_ns / 1e9),
-		Ctime: int64(d.Ctime_ns / 1e9),
-		Mtime: int64(d.Mtime_ns / 1e9),
+	Name:  filepath,
+	Mode:  int64(d.Mode),
+	Uid:   d.Uid,
+	Gid:   d.Gid,
+	Size:  int64(d.Size),
+	Atime: int64(d.Atime_ns / 1e9),
+	Ctime: int64(d.Ctime_ns / 1e9),
+	Mtime: int64(d.Mtime_ns / 1e9),
 	}
 
 	if d.IsDirectory() {
@@ -317,29 +318,64 @@ func CheckMagicNumber(r io.Reader) os.Error {
 	return nil
 }
 
-func main() {
-	fio, create, password, e := setup()
-	error.PanicOnError(e, "epd failed")
+func errorhandler() {
+	if x := recover(); x != nil {
+		switch e := x.(type) {
+		case os.Error:
+			fmt.Fprintf(os.Stderr, "FATAL: %s\n", e.String())
+		default:
+			panic(x)
+		}
+	}
+}
 
-	key, e := crypto.SHA256hash([]byte(password))
-	error.PanicOnError(e, "Calculating password hash failed")
-	iv, e := crypto.MD5hash([]byte(password))
-	error.PanicOnError(e, "Calculating password hash failed")
+func PanicOnError(e os.Error, v interface{}) {
+	if e != nil {
+		panic(v)
+	}
+}
+
+func SHA256hash(data []byte) ([]byte, os.Error) {
+	return hashf(sha256.New(), data)
+}
+
+func MD5hash(data []byte) ([]byte, os.Error) {
+	return hashf(md5.New(), data)
+}
+
+func hashf(hash hash.Hash, data []byte) ([]byte, os.Error) {
+	n, e := hash.Write(data)
+
+	if n != len(data) || e != nil {
+		return nil, e
+	}
+	return hash.Sum(), nil
+}
+
+func main() {
+	defer errorhandler()
+	fio, create, password, e := setup()
+	PanicOnError(e, "Could not complete setup")
+
+	key, e := SHA256hash([]byte(password))
+	PanicOnError(e, "Calculating password hash failed")
+	iv, e := MD5hash([]byte(password))
+	PanicOnError(e, "Calculating password hash failed")
 
 	if create {
 		cio, e := SetupEncrypt(fio, key, iv)
-		error.PanicOnError(e, "Encryption system failed")
+		PanicOnError(e, "Encryption system failed")
 		fmt.Fprintf(cio, "CTAR")
 		for _, dir := range flag.Args() {
 			e = TarDirectory(dir, cio)
-			error.PanicOnError(e, "Taring failed")
+			PanicOnError(e, "Taring failed")
 		}
 	} else {
 		cio, e := SetupDecrypt(fio, key, iv)
-		error.PanicOnError(e, "Decryption system failed")
+		PanicOnError(e, "Decryption system failed")
 		e = CheckMagicNumber(cio)
-		error.PanicOnError(e, "Not a valid CTAR")
+		PanicOnError(e, "Not a valid CTAR")
 		e = UntarArchive(cio)
-		error.PanicOnError(e, "Extracting failed")
+		PanicOnError(e, "Extracting failed")
 	}
 }
